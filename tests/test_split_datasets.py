@@ -20,3 +20,6 @@ def test_split_by_fraction(test_df):
             assert len(split_dataframes) == len(fractions) + 1
             for frac, elem in zip(fractions, split_dataframes):
                 assert len(elem) == int(frac * len(dataframe))
+            assert sum(  # pylint: disable=consider-using-generator
+                [len(df) for df in split_dataframes]
+            ) == len(dataframe)
