@@ -34,6 +34,25 @@ def test_forecast(test_df):
     assert numpy.allclose(
         forecast, pandas.Series([13.75, 13.75, 13.75], [8, 9, 10])
     )
+    # Test for validation not having uniform time deltas:
+    val_df["Time"].iloc[2] += 1
+    fcast = Forecast(
+        train_df["Time"],
+        train_df["Value"],
+        val_df["Time"],
+        val_df["Value"],
+    )
+    assert fcast.forecast_length == 4
+    # Test for training data not having uniform time deltas:
+    val_df["Time"].iloc[2] -= 1
+    train_df["Time"].astype(float, copy=False).iloc[2] += 0.5
+    fcast = Forecast(
+        train_df["Time"],
+        train_df["Value"],
+        val_df["Time"],
+        val_df["Value"],
+    )
+    assert fcast.forecast_length == 3
 
 
 def test_single_exponential_smoothing(test_df):
