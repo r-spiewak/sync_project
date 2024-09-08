@@ -14,23 +14,7 @@ from sync_project.forecasting.statistics.triple_exponential_smoothing import (
     TripleExponentialSmoothing,
 )
 
-# Forecasting method class wrappers:
 
-# Statistical methods:
-
-# Add ARIMA
-
-
-# Machine Learning methods:
-
-# Add scikit-learn methods
-
-# Add XGBoost method
-
-# Add LLM method?
-
-
-# Class to find and use best forecasting method:
 class Forecast:  # pylint: disable=too-many-instance-attributes
     """Class to find the best forecasting method
     and parameters, of the given forecasting
