@@ -65,7 +65,7 @@ class TripleExponentialSmoothing(
                 fitting Triple Exponential
                 Smoothing forecasting method.
         """
-        # Check for data types.
+        # Really should check for data types here.
         self.time_data = time_data
         self.value_data = value_data
         self.data_series = pandas.Series(
@@ -99,6 +99,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         validation_value_data: pandas.Series,
         methods: list | None = None,
         metric: Callable = mean_squared_error,
+        comparison_method: Callable = min,
     ):
         """Initialization method for class.
 
@@ -122,6 +123,10 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             metric (Callable): Metric to use to
                 determine best forecast method.
                 Defaults to 'mean_squared_error'.
+            comparison_method (Callable): Method to
+                compare calculated metric values,
+                to determine the best value.
+                Defaults to 'min'.
         """
         self.training_time_data = training_time_data
         self.training_value_data = training_value_data
@@ -145,6 +150,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         )
         self.metric_values = [None for _ in self.methods]
         self.metric = metric
+        self.comparison_method = comparison_method
         self.best_forecast_method = None
         self.best_forecast_fit = None
         # Figure out how many forecasting data
@@ -180,6 +186,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 current_time = (
                     self.training_time_data.array[-1] + training_time_deltas[0]
                 )
+                # There is probably a better/more pythonic/more efficient way
+                # to do this, but it's not coming to me at the moment.
                 while (  # pylint: disable=while-used
                     self.validation_time_data.array[-1] > current_time
                 ):
@@ -193,15 +201,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             # calculating metrics.
             self.forecast_length = len(self.validation_time_data)
 
-    def fit(self, comparison_method: Callable = min):
+    def fit(self):
         """Method to find the best forecast method
         of the given options.
-
-        Args:
-            comparison_method (Callable): Method to
-                compare calculated metric values,
-                to determine the best value.
-                Defaults to 'min'.
         """
         for ind, method in enumerate(self.methods):
             fit = method(
@@ -213,7 +215,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 fit.forecast(self.forecast_length),
             )
         self.best_forecast_method = self.methods[
-            self.metric_values.index(comparison_method(self.metric_values))
+            self.metric_values.index(
+                self.comparison_method(self.metric_values)
+            )
         ](
             pandas.concat(
                 [
