@@ -1,79 +1,24 @@
-"""This file contains classes useful for forecasting."""
+"""This file contains classes useful for forecasting and
+fitting the best forecasting method."""
 
 from collections.abc import Callable
 
 import numpy
 import pandas
 from sklearn.metrics import mean_squared_error
-from statsmodels.tsa.api import ExponentialSmoothing, SimpleExpSmoothing
 
-# pylint: disable=abstract-method
+from sync_project.forecasting.statistics.single_exponential_smoothing import (
+    SingleExponentialSmoothing,
+)
+from sync_project.forecasting.statistics.triple_exponential_smoothing import (
+    TripleExponentialSmoothing,
+)
 
 # Forecasting method class wrappers:
 
 # Statistical methods:
 
 # Add ARIMA
-
-
-class SingleExponentialSmoothing(
-    SimpleExpSmoothing,
-):
-    """Wrapper class to hold Single Exponential
-    Smoothing forecasting methods and information."""
-
-    def __init__(self, time_data: pandas.Series, value_data: pandas.Series):
-        """Initialization method for class.
-
-        Args:
-            time_data (pandas.Series):
-                Series of times to be used in
-                fitting Single Exponential
-                Smoothing forecasting method.
-            value_data (pandas.Series):
-                Series of data values to be used in
-                fitting single Exponential
-                Smoothing forecasting method.
-        """
-        # Check for data types.
-        self.time_data = time_data
-        self.value_data = value_data
-        self.data_series = pandas.Series(
-            self.value_data.to_numpy(),
-            self.time_data.to_numpy(),
-        )
-        super().__init__(self.data_series, initialization_method="estimated")
-        self.forecasting_method = "Single Exponential Smoothing"
-
-
-class TripleExponentialSmoothing(
-    ExponentialSmoothing,
-):
-    """Wrapper class to hold Triple Exponential
-    Smoothing forecasting methods and information."""
-
-    def __init__(self, time_data: pandas.Series, value_data: pandas.Series):
-        """Initialization method for class.
-
-        Args:
-            time_data (pandas.Series):
-                Series of times to be used in
-                fitting Triple Exponential
-                Smoothing forecasting method.
-            value_data (pandas.Series):
-                Series of data values to be used in
-                fitting Triple Exponential
-                Smoothing forecasting method.
-        """
-        # Really should check for data types here.
-        self.time_data = time_data
-        self.value_data = value_data
-        self.data_series = pandas.Series(
-            self.value_data.to_numpy(),
-            self.time_data.to_numpy(),
-        )
-        super().__init__(self.data_series, initialization_method="estimated")
-        self.forecasting_method = "Triple Exponential Smoothing"
 
 
 # Machine Learning methods:

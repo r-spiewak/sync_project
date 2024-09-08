@@ -4,7 +4,7 @@ splitting functions."""
 import pandas
 import pytest
 
-from sync_project.split_datasets import split_by_fraction
+from sync_project.data_operations.split_datasets import split_by_fraction
 
 
 def test_split_by_fraction(test_df):

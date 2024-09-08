@@ -2,7 +2,7 @@
 
 import pandas
 
-from sync_project.data_loading import load_data
+from sync_project.data_operations.data_loading import load_data
 
 
 def test_load_data():
