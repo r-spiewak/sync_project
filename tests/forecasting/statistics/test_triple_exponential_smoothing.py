@@ -15,11 +15,14 @@ def test_triple_exponential_smoothing(test_df):
     """This function tests the
     TripleExponentialSmoothing class."""
     train_df, _ = test_df
-    tes = TripleExponentialSmoothing(train_df["Time"], train_df["Value"])
+    tes = TripleExponentialSmoothing(
+        train_df["Time"].to_numpy(),
+        train_df["Value"].to_numpy(),
+    )
     # Test attributes:
     assert tes.forecasting_method == "Triple Exponential Smoothing"
-    assert tes.time_data.equals(train_df["Time"])
-    assert tes.value_data.equals(train_df["Value"])
+    assert numpy.array_equal(train_df["Time"].to_numpy(), tes.time_data)
+    assert numpy.array_equal(train_df["Value"].to_numpy(), tes.value_data)
     # Test method results from super class?
     fit = tes.fit()
     assert fit.model.params["smoothing_level"] > 0

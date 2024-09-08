@@ -38,10 +38,10 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
 
     def __init__(  # pylint: disable=too-many-arguments
         self,
-        training_time_data: pandas.Series,
-        training_value_data: pandas.Series,
-        validation_time_data: pandas.Series,
-        validation_value_data: pandas.Series,
+        training_time_data: numpy.ndarray | pandas.Series,
+        training_value_data: numpy.ndarray | pandas.Series,
+        validation_time_data: numpy.ndarray | pandas.Series,
+        validation_value_data: numpy.ndarray | pandas.Series,
         methods: list | None = None,
         metric: Callable = mean_squared_error,
         comparison_method: Callable = min,
@@ -49,16 +49,16 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         """Initialization method for class.
 
         Args:
-            training_time_data (pandas.Series):
+            training_time_data (numpy.ndarray | pandas.Series):
                 Series of times to be used in
                 fitting forecasting methods.
-            training_value_data (pandas.Series):
+            training_value_data (numpy.ndarray | pandas.Series):
                 Series of data values to be used in
                 fitting forecasting methods.
-            validation_time_data (pandas.Series):
+            validation_time_data (numpy.ndarray | pandas.Series):
                 Series of times to be used in
                 validating forecasting methods.
-            validation_value_data (pandas.Series):
+            validation_value_data (numpy.ndarray | pandas.Series):
                 Series of data values to be used in
                 validating forecasting methods.
             methods (List[Class] | None): List of
@@ -74,16 +74,24 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 Defaults to 'min'.
         """
         self.training_time_data = training_time_data
+        if isinstance(self.training_time_data, pandas.Series):
+            self.training_time_data = self.training_time_data.to_numpy()
         self.training_value_data = training_value_data
+        if isinstance(self.training_value_data, pandas.Series):
+            self.training_value_data = self.training_value_data.to_numpy()
         self.training_data = pandas.Series(
-            self.training_value_data.to_numpy(),
-            self.training_time_data.to_numpy(),
+            self.training_value_data,
+            self.training_time_data,
         )
         self.validation_time_data = validation_time_data
+        if isinstance(self.validation_time_data, pandas.Series):
+            self.validation_time_data = self.validation_time_data.to_numpy()
         self.validation_value_data = validation_value_data
+        if isinstance(self.validation_value_data, pandas.Series):
+            self.validation_value_data = self.validation_value_data.to_numpy()
         self.validation_data = pandas.Series(
-            self.validation_value_data.to_numpy(),
-            self.validation_time_data.to_numpy(),
+            self.validation_value_data,
+            self.validation_time_data,
         )
         self.methods = (
             methods
@@ -104,12 +112,10 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         # First, determine if the time deltas between
         # data points areidentical.
         training_time_deltas = (
-            self.training_time_data[1:].array
-            - self.training_time_data[:-1].array
+            self.training_time_data[1:] - self.training_time_data[:-1]
         )
         validation_time_deltas = (
-            self.validation_time_data[1:].array
-            - self.validation_time_data[:-1].array
+            self.validation_time_data[1:] - self.validation_time_data[:-1]
         )
         if len(numpy.unique(training_time_deltas)) == 1:
             if (
@@ -129,12 +135,12 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 # training time delta.
                 self.forecast_length = 1
                 current_time = (
-                    self.training_time_data.array[-1] + training_time_deltas[0]
+                    self.training_time_data[-1] + training_time_deltas[0]
                 )
                 # There is probably a better/more pythonic/more efficient way
                 # to do this, but it's not coming to me at the moment.
                 while (  # pylint: disable=while-used
-                    self.validation_time_data.array[-1] > current_time
+                    self.validation_time_data[-1] > current_time
                 ):
                     self.forecast_length += 1
                     current_time += training_time_deltas[0]
@@ -165,17 +171,17 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 self.comparison_method(self.metric_values)
             )
         ](
-            pandas.concat(
-                [
+            numpy.concatenate(
+                (
                     self.training_time_data,
                     self.validation_time_data,
-                ],
+                ),
             ),
-            pandas.concat(
-                [
+            numpy.concatenate(
+                (
                     self.training_value_data,
                     self.validation_value_data,
-                ],
+                ),
             ),
         )
         assert self.best_forecast_method is not None

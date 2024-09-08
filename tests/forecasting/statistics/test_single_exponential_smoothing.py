@@ -15,11 +15,14 @@ def test_single_exponential_smoothing(test_df):
     """This function tests the
     SingleExponentialSmoothing class."""
     train_df, _ = test_df
-    ses = SingleExponentialSmoothing(train_df["Time"], train_df["Value"])
+    ses = SingleExponentialSmoothing(
+        train_df["Time"].to_numpy(),
+        train_df["Value"].to_numpy(),
+    )
     # Test attributes:
     assert ses.forecasting_method == "Single Exponential Smoothing"
-    assert ses.time_data.equals(train_df["Time"])
-    assert ses.value_data.equals(train_df["Value"])
+    assert numpy.array_equal(train_df["Time"].to_numpy(), ses.time_data)
+    assert numpy.array_equal(train_df["Value"].to_numpy(), ses.value_data)
     # Test method results from super class?
     fit = ses.fit()
     assert fit.model.params["smoothing_level"] > 0
