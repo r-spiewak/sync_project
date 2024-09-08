@@ -25,13 +25,19 @@ def test_forecast(test_df):
         == "Single Exponential Smoothing"
     )
     assert fit.model.params["smoothing_level"] > 0
+    assert "Single Exponential Smoothing" in fcast.forecast_methods
+    for key in ("class", "fit", "params", "forecast", "mean_squared_error"):
+        assert (
+            key
+            in fcast.forecast_methods["Single Exponential Smoothing"].keys()
+        )
     forecast = fit.forecast(3)
     assert len(forecast) == 3
     assert numpy.allclose(
         forecast, pandas.Series([13.75, 13.75, 13.75], [8, 9, 10])
     )
     # Test for validation not having uniform time deltas:
-    val_df["Time"].iloc[2] += 1
+    val_df.loc[2, "Time"] += 1
     fcast = Forecast(
         train_df["Time"],
         train_df["Value"],
@@ -40,8 +46,9 @@ def test_forecast(test_df):
     )
     assert fcast.forecast_length == 4
     # Test for training data not having uniform time deltas:
-    val_df["Time"].iloc[2] -= 1
-    train_df["Time"].astype(float, copy=False).iloc[2] += 0.5
+    val_df.loc[2, "Time"] -= 1
+    train_df["Time"] = train_df["Time"].astype(float)
+    train_df.loc[2, "Time"] += 0.5
     fcast = Forecast(
         train_df["Time"],
         train_df["Value"],

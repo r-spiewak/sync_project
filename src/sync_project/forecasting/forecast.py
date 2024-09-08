@@ -85,6 +85,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 TripleExponentialSmoothing,
             ]
         )
+        self.forecast_methods: dict[str, dict] = {}
         self.metric_values = [None for _ in self.methods]
         self.metric = metric
         self.comparison_method = comparison_method
@@ -141,15 +142,25 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         of the given options.
         """
         for ind, method in enumerate(self.methods):
-            fit = method(
+            method_class = method(
                 self.training_time_data,
                 self.training_value_data,
-            ).fit()  # I assume the likelihood estimate is
-            # better than what a grid search would find?
-            self.metric_values[ind] = self.metric(
-                self.validation_data,
-                fit.forecast(self.forecast_length),
             )
+            fit = method_class.fit()  # I assume the likelihood estimate is
+            # better than what a grid search would find?
+            forecast = fit.forecast(self.forecast_length)
+            metric = self.metric(
+                self.validation_data,
+                forecast,
+            )
+            self.forecast_methods[method_class.forecasting_method] = {
+                "class": method_class,
+                "fit": fit,
+                "params": fit.model.params,
+                self.metric.__name__: metric,
+                "forecast": forecast,
+            }
+            self.metric_values[ind] = metric
         self.best_forecast_method = self.methods[
             self.metric_values.index(
                 self.comparison_method(self.metric_values)
