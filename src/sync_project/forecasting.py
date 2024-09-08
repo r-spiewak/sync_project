@@ -209,7 +209,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             fit = method(
                 self.training_time_data,
                 self.training_value_data,
-            ).fit()
+            ).fit()  # I assume the likelihood estimate is
+            # better than what a grid search would find?
             self.metric_values[ind] = self.metric(
                 self.validation_data,
                 fit.forecast(self.forecast_length),
