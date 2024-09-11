@@ -57,14 +57,9 @@ def test_fit(
     assert (
         test_fcast.best_forecast_fit_result.model.params["smoothing_level"] > 0
     )
-    assert "Single Exponential Smoothing" in test_fcast.forecast_methods
+    assert "Single Exponential Smoothing" in test_fcast.methods.keys()
     for key in ("class", "fit", "params", "forecast", "mean_squared_error"):
-        assert (
-            key
-            in test_fcast.forecast_methods[
-                "Single Exponential Smoothing"
-            ].keys()
-        )
+        assert key in test_fcast.methods["Single Exponential Smoothing"].keys()
     test_fcast_datetimes.fit()
     test_fcast_datetimes_nonuniform.fit()
 
@@ -81,8 +76,10 @@ def test_forecast(
     # even though it is returned correctly by the forecast method):
     # forecast = test_fcast.fit().forecast(3)
     # But if I split it up into two calls, it does work:
-    test_fcast.fit()
-    forecast = test_fcast.forecast(3)
+    # test_fcast.fit()
+    # forecast = test_fcast.forecast(3)
+    # Maybe it'll work now that each emthod returns "self" directly?
+    forecast = test_fcast.fit().forecast(3).best_forecast_forecast
     assert len(forecast) == 3
     assert numpy.allclose(
         forecast, pandas.Series([13.75, 13.75, 13.75], [8, 9, 10])

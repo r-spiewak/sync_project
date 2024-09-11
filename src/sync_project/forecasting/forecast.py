@@ -29,7 +29,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         training_value_data: numpy.ndarray | pandas.Series,
         validation_time_data: numpy.ndarray | pandas.Series,
         validation_value_data: numpy.ndarray | pandas.Series,
-        methods: list | None = None,
+        methods: dict | None = None,
         metric: Callable = mean_squared_error,
         comparison_method: Callable = min,
     ):
@@ -48,10 +48,10 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             validation_value_data (numpy.ndarray | pandas.Series):
                 Series of data values to be used in
                 validating forecasting methods.
-            methods (List[Class] | None): List of
-                classes of forecasting methods. If
-                None, uses a pre-defined list of
-                classes. Defaults to None.
+            methods (dict | None): Dictionary of
+                classes and parameters of forecasting
+                methods. If None, uses a pre-defined
+                dictionary. Defaults to None.
             metric (Callable): Metric to use to
                 determine best forecast method.
                 Defaults to 'mean_squared_error'.
@@ -60,6 +60,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 to determine the best value.
                 Defaults to 'min'.
         """
+        # Add type validation.
         self.training_time_data = training_time_data
         if isinstance(self.training_time_data, pandas.Series):
             self.training_time_data = self.training_time_data.to_numpy()
@@ -83,12 +84,22 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         self.methods = (
             methods
             if methods
-            else [
-                SingleExponentialSmoothing,
-                TripleExponentialSmoothing,
-            ]
+            else {
+                "Single Exponential Smoothing": {
+                    "class": SingleExponentialSmoothing,
+                    "param_grid": {
+                        2: "d",
+                    },
+                },
+                "Triple Exponential Smoothing": {
+                    "class": TripleExponentialSmoothing,
+                    "param_grid": {
+                        2: "c",
+                    },
+                },
+            }
         )
-        self.forecast_methods: dict[str, dict] = {}
+        # self.forecast_methods: dict[str, dict] = {}
         self.metric_values = [None for _ in self.methods]
         self.metric = metric
         self.comparison_method = comparison_method
@@ -184,8 +195,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         """Method to find the best forecast method
         of the given options.
         """
-        for ind, method in enumerate(self.methods):
-            method_class = method(
+        for ind, method in enumerate(self.methods.keys()):
+            method_class = self.methods[method]["class"](
                 self.training_time_data,
                 self.training_value_data,
             )
@@ -211,20 +222,26 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 self.validation_data,
                 forecast,
             )
-            self.forecast_methods[method_class.forecasting_method] = {
-                "class": method_class,
-                "result_object": fit,
-                "fit": fit.fittedvalues,
-                "params": fit.model.params,
-                self.metric.__name__: metric,
-                "forecast": forecast,
-            }
-            self.metric_values[ind] = metric
-        self.best_forecast_method = self.methods[
-            self.metric_values.index(
-                self.comparison_method(self.metric_values)
+            self.methods[method].update(
+                {
+                    "result_object": fit,
+                    "fit": fit.fittedvalues,
+                    "params": fit.model.params,
+                    self.metric.__name__: metric,
+                    "forecast": forecast,
+                }
             )
-        ](
+            self.metric_values[ind] = metric
+        # self.best_forecast_method = self.methods[
+        #     self.metric_values.index(
+        #         self.comparison_method(self.metric_values)
+        #     )
+        self.best_forecast_method = self.methods[
+            self.comparison_method(
+                self.methods,
+                key=lambda v: self.methods[v][self.metric.__name__],
+            )
+        ]["class"](
             numpy.concatenate(
                 (
                     self.training_time_data,
@@ -243,7 +260,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         # Get forecast model params with:
         # self.best_forecast_fit_result.model.params
         self.best_forecast_fit = self.best_forecast_fit_result.fittedvalues
-        return self.best_forecast_fit
+        return self
 
     def forecast(self, forecast_length: int) -> pandas.Series:
         """Calls the forecast method of the
@@ -285,7 +302,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     for i in range(forecast_length)
                 ]
             )
-        return self.best_forecast_forecast
+        return self
 
     def plot_all(self):
         """Plots all the fits and forecasts."""
@@ -301,14 +318,26 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         colors_list = ("b", "g", "r", "c", "m", "y")
         linestyles_list = ("-", "-.")
         linestyles_list_pred = ("--", ":")
-        if len(self.forecast_methods) < 1:
+        if (
+            "fit"  # pylint: disable=magic-value-comparison
+            not in self.methods[
+                list(
+                    self.methods.keys()  # pylint: disable=consider-iterating-dictionary
+                )[0]
+            ]
+        ):
             warnings.warn(
                 UserWarning(
                     "'fit' method has not yet been called; "
                     "only input data will be included on the plot."
                 )
             )
-        for ind, (method, vals) in enumerate(self.forecast_methods.items()):
+        for ind, (method, vals) in enumerate(self.methods.items()):
+            if (
+                "fit"  # pylint: disable=magic-value-comparison
+                not in vals.keys()
+            ):
+                continue
             color = colors_list[int(ind % len(colors_list))]
             linestyle_ind = int(
                 (ind / len(colors_list)) % len(linestyles_list)
