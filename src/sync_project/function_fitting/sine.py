@@ -32,7 +32,7 @@ def sine(
     return a * numpy.sin(b * x + c) + d
 
 
-class Exponential(CurveFitWrapper):
+class Sine(CurveFitWrapper):
     """Wrapper class for fitting an Sine curve using curve_fit."""
 
     def __init__(self, **fit_params):

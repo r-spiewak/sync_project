@@ -10,6 +10,8 @@ import pandas
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator, RegressorMixin
 
+# from sync_project.constants import TimePointLabels
+
 
 class CurveFitWrapper(BaseEstimator, RegressorMixin):
     """A base wrapper for scipy.optimize.curve_fit to make it compatible with scikit-learn."""
@@ -63,6 +65,9 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
         Returns:
             self (object): Fitted estimator.
         """
+        # Pull out the correct 'feature'(s) to use.
+        # cols = [i for i in X.columns if TimePointLabels.PRESENT.value in i]
+        # X = np.asarray(X[cols]).flatten()
         X = np.asarray(X).flatten()
         y = np.asarray(y).flatten()
 
