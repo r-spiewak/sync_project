@@ -2,7 +2,10 @@
 
 import pandas
 
-from sync_project.constants import DEFAULT_TIMESERIES_LABELS_COL_NAME
+from sync_project.constants import (
+    DEFAULT_TIMESERIES_LABELS_COL_NAME,
+    TimePointLabels,
+)
 
 
 def timeseries_to_labels(
@@ -15,7 +18,8 @@ def timeseries_to_labels(
     data time series into a "supervised" time series,
     using a lag window of p for the number of past
     features, and a negative lag window of n for the
-    number of future labels.
+    number of future labels. The total number of
+    additional columns will be (p+1+n)*len(cols).
 
     Args:
         data (pandas.Series | pandas.DataFrame):
@@ -29,7 +33,8 @@ def timeseries_to_labels(
             match that in data (if present) or default
             to 'var'. Defaults to None.
         p (int): Number of past datapoints to use as
-            features.
+            features. This count does not include the
+            feature of the datapoint in the base column.
         n (int): Number of future datapoints to use as
             labels.
 
@@ -52,9 +57,9 @@ def timeseries_to_labels(
     default_col_name = DEFAULT_TIMESERIES_LABELS_COL_NAME
     if not cols:
         if isinstance(data, pandas.Series):
-            cols = [data.name] or [default_col_name]
+            cols = [data.name or default_col_name]
         elif data.shape[1] == 1:
-            cols = [data.columns[0]] or [default_col_name]
+            cols = [data.columns[0] or default_col_name]
         else:
             raise ValueError(
                 "'cols' must be supplied when `data` has"
@@ -66,10 +71,14 @@ def timeseries_to_labels(
         data = data.to_frame(name=cols[0])
     for col in cols:
         for i in range(p, 0, -1):
-            data[col + f" (t-{i})"] = data[col].shift(i)
-        data[col + " (t)"] = data[col].copy()
-        for i in range(1, n):
-            data[col + f" (t+{i})"] = data[col].shift(-i)
+            data[col + " " + TimePointLabels.PAST.value + f"{i})"] = data[
+                col
+            ].shift(i)
+        data[col + " " + TimePointLabels.PRESENT.value] = data[col].copy()
+        for i in range(1, n + 1):
+            data[col + " " + TimePointLabels.FUTURE.value + f"{i})"] = data[
+                col
+            ].shift(-i)
     return data
 
 

@@ -11,7 +11,7 @@ from sync_project.forecasting.forecast import Forecast
 # pylint: disable=magic-value-comparison,duplicate-code
 
 
-def test_forecast_class(test_df):
+def test_forecast_class(test_df, test_methods_dict):
     """This function tests the Forecast class
     initialization."""
     train_df, val_df = test_df
@@ -20,6 +20,8 @@ def test_forecast_class(test_df):
         train_df["Value"],
         val_df["Time"],
         val_df["Value"],
+        methods=test_methods_dict,
+        n_splits=3,
     )
     # Test for validation not having uniform time deltas:
     val_df.loc[2, "Time"] += 1
@@ -28,6 +30,8 @@ def test_forecast_class(test_df):
         train_df["Value"],
         val_df["Time"],
         val_df["Value"],
+        methods=test_methods_dict,
+        n_splits=3,
     )
     assert fcast.forecast_length == 4
     # Test for training data not having uniform time deltas:
@@ -39,6 +43,8 @@ def test_forecast_class(test_df):
         train_df["Value"],
         val_df["Time"],
         val_df["Value"],
+        methods=test_methods_dict,
+        n_splits=3,
     )
     assert fcast.forecast_length == 3
 
@@ -50,15 +56,21 @@ def test_fit(
     Forecast class."""
     assert not test_fcast.best_forecast_method
     test_fcast.fit()
+    assert test_fcast.best_method_name == "Triple Exponential Smoothing"
     assert (
-        test_fcast.best_forecast_method.forecasting_method
-        == "Single Exponential Smoothing"
-    )
-    assert (
-        test_fcast.best_forecast_fit_result.model.params["smoothing_level"] > 0
+        test_fcast.methods[test_fcast.best_method_name]["params"][
+            "seasonal_periods"
+        ]
+        > 0
     )
     assert "Single Exponential Smoothing" in test_fcast.methods.keys()
-    for key in ("class", "fit", "params", "forecast", "mean_squared_error"):
+    for key in (
+        "class",
+        "result_object",
+        "params",
+        "forecast",
+        "mean_squared_error",
+    ):
         assert key in test_fcast.methods["Single Exponential Smoothing"].keys()
     test_fcast_datetimes.fit()
     test_fcast_datetimes_nonuniform.fit()
@@ -82,11 +94,12 @@ def test_forecast(
     forecast = test_fcast.fit().forecast(3).best_forecast_forecast
     assert len(forecast) == 3
     assert numpy.allclose(
-        forecast, pandas.Series([13.75, 13.75, 13.75], [8, 9, 10])
+        forecast,
+        pandas.Series([14.2857143, 14.2857143, 14.2857143], [8, 9, 10]),
     )
     assert numpy.allclose(
         test_fcast.best_forecast_forecast,
-        pandas.Series([13.75, 13.75, 13.75], [8, 9, 10]),
+        pandas.Series([14.2857143, 14.2857143, 14.2857143], [8, 9, 10]),
     )
     test_fcast_datetimes.fit()
     test_fcast_datetimes.forecast(3)

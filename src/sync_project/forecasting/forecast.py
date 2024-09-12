@@ -9,7 +9,10 @@ import matplotlib.pyplot
 import numpy
 import pandas
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
+from sync_project.constants import TimePointLabels
+from sync_project.data_operations.data_labeling import timeseries_to_labels
 from sync_project.forecasting.statistics.single_exponential_smoothing import (
     SingleExponentialSmoothing,
 )
@@ -32,6 +35,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         methods: dict | None = None,
         metric: Callable = mean_squared_error,
         comparison_method: Callable = min,
+        n_splits: int = 5,
+        verbose: int = 0,
     ):
         """Initialization method for class.
 
@@ -59,6 +64,12 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 compare calculated metric values,
                 to determine the best value.
                 Defaults to 'min'.
+            n_splits (int): Number of splits to be made
+                in training data for the cross-validation.
+                Defaults to 5.
+            verbose (int): Level of verbosity in output
+                of GridSearchCV calls. Higher values
+                yield more output. Defaults to 0.
         """
         # Add type validation.
         self.training_time_data = training_time_data
@@ -88,14 +99,25 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 "Single Exponential Smoothing": {
                     "class": SingleExponentialSmoothing,
                     "param_grid": {
-                        2: "d",
+                        "smoothing_level": numpy.arange(0, 1, 0.1),
                     },
+                    "past_points": [0],
                 },
                 "Triple Exponential Smoothing": {
                     "class": TripleExponentialSmoothing,
                     "param_grid": {
-                        2: "c",
+                        "trend": [None, "add", "mul"],
+                        "seasonal": [None, "add", "mul"],
+                        "seasonal_periods": [2, 3, 6, 12, 24],
+                        "smoothing_level": numpy.arange(0, 1, 0.1),
+                        "smoothing_trend": numpy.arange(
+                            0,
+                            1,
+                            0.1,
+                        ),
+                        "smoothing_seasonal": numpy.arange(0, 1, 0.1),
                     },
+                    "past_points": [0],
                 },
             }
         )
@@ -104,6 +126,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         self.metric = metric
         self.comparison_method = comparison_method
         self.best_forecast_method = None
+        self.best_method_name = None
         self.best_forecast_fit_result = None
         self.best_forecast_fit = None
         self.best_forecast_forecast = None
@@ -190,19 +213,22 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             self.forecast_times = self.validation_time_data.copy()
         # For the final forecast with the best fit model:
         self.best_forecast_times = None
+        self.full_training_data = None
+        self.n_splits = n_splits
+        self.verbose = verbose
 
-    def fit(self):
+    def fit(self):  # pylint: disable=too-many-locals
+        # Clearly this monstrosity of a method needs to
+        # be broken down into smaller sub-methods...
         """Method to find the best forecast method
         of the given options.
         """
         for ind, method in enumerate(self.methods.keys()):
-            method_class = self.methods[method]["class"](
-                self.training_time_data,
-                self.training_value_data,
-            )
-            fit = method_class.fit()  # I assume the likelihood estimate is
-            # better than what a grid search would find?
-            forecast = fit.forecast(self.forecast_length)
+            # method_class = self.methods[method]["class"](
+            #     self.training_time_data,
+            #     self.training_value_data,
+            # )
+            # forecast = fit.forecast(self.forecast_length)
             # An alternative to the above method is below.
             # However, note that in each case, if there is no
             # regular frequency to the index (i.e., if the time
@@ -218,17 +244,106 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             #     start=self.forecast_times[0],
             #     end=self.forecast_times[-1],
             # )
+            method_class = self.methods[method]["class"]()
+            param_grid = self.methods[method]["param_grid"]
+            past_points_scores = []
+            past_points_preds = []
+            past_points_models = []
+            for past_points in self.methods[method]["past_points"]:
+                this_training_data = timeseries_to_labels(
+                    self.training_data,
+                    p=past_points,
+                    n=1,
+                ).dropna()
+                train_cols = [
+                    col
+                    for col in this_training_data.columns
+                    if (
+                        TimePointLabels.PAST.value in col
+                        or TimePointLabels.PRESENT.value in col
+                    )
+                ]
+                pred_col = [
+                    col
+                    for col in this_training_data.columns
+                    if TimePointLabels.FUTURE.value in col
+                ]
+                this_val_data = timeseries_to_labels(
+                    self.validation_data,
+                    p=past_points,
+                    n=1,
+                ).dropna()
+                # I could call the following method once outside
+                # the loop, if I store the results in a list (since
+                # otherwise the generator will not loop results again).
+                cv = TimeSeriesSplit(
+                    n_splits=self.n_splits,
+                ).split(this_training_data)
+                grid_search = GridSearchCV(
+                    method_class,
+                    param_grid,
+                    scoring=self.metric,
+                    cv=cv,
+                    verbose=self.verbose,
+                )
+                # We need to supply training data to fit the model.
+                # We supply it in the form of features for each
+                # For ML methods, we must supply the full X df of features
+                # (for forecasting with timeseries, we can supply
+                # features of the previous n values). We also need to
+                # supply y labels, which can be the next p timesteps'
+                # values.
+                # For statsmodels, we supply a single feature.
+                # The wrapper can probably take care of the splitting
+                # of the df to just use the one column of the current
+                # timestep.
+                # fit = method_class.fit(self.training_value_data)
+                grid_search.fit(
+                    this_training_data[train_cols],
+                    this_training_data[pred_col],
+                )
+                # To use this with the wrapper class and with sklearn estimators,
+                # we need to supply a features DataFrame.
+                # The conditions of which df to apply are the same as above.
+                # For statsmodels, we can supply times (or, really, anything
+                # that has the length of the number of predictions we want).
+                # For the ML models, we must supply features, as previously.
+                # forecast = method_class.predict(X=self.validation_time_data)
+                preds = grid_search.predict(X=this_val_data[train_cols])
+                past_points_preds.append(preds)
+                past_points_scores.append(
+                    self.metric(preds, this_val_data[pred_col])
+                )
+                past_points_models.append(grid_search)
+            best_past_points_ind = past_points_scores.index(
+                self.comparison_method(past_points_scores)
+            )
+            best_past_points = self.methods[method]["past_points"][
+                best_past_points_ind
+            ]
+            fit = past_points_models[best_past_points_ind]
+            forecast = past_points_preds[best_past_points_ind]
             metric = self.metric(
-                self.validation_data,
+                self.validation_data[:-1],
                 forecast,
             )
             self.methods[method].update(
                 {
+                    "past_points_fits": {
+                        "scores": past_points_scores,
+                        "models": past_points_models,
+                        "predictions": past_points_preds,
+                    },
+                    "best_past_points": best_past_points,
                     "result_object": fit,
-                    "fit": fit.fittedvalues,
-                    "params": fit.model.params,
+                    # These two only make sense when fit
+                    # itself is a statsmodels object.
+                    # "fit": fit.fittedvalues,
+                    # "params": fit.model.params,
+                    "params": fit.best_params_,
                     self.metric.__name__: metric,
                     "forecast": forecast,
+                    "forecast_times": self.validation_time_data[:-1],
                 }
             )
             self.metric_values[ind] = metric
@@ -236,42 +351,80 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         #     self.metric_values.index(
         #         self.comparison_method(self.metric_values)
         #     )
-        self.best_forecast_method = self.methods[
-            self.comparison_method(
-                self.methods,
-                key=lambda v: self.methods[v][self.metric.__name__],
-            )
-        ]["class"](
-            numpy.concatenate(
-                (
-                    self.training_time_data,
-                    self.validation_time_data,
-                ),
-            ),
-            numpy.concatenate(
-                (
-                    self.training_value_data,
-                    self.validation_value_data,
-                ),
-            ),
+        self.best_method_name = self.comparison_method(
+            self.methods,
+            key=lambda v: self.methods[v][self.metric.__name__],
         )
+        # Retrain best model on training and validation data:
+        # Combine datasets and use best_past_points:
+        full_training_data = timeseries_to_labels(
+            pandas.concat(
+                [
+                    self.training_data,
+                    self.validation_data,
+                ]
+            ),
+            p=self.methods[self.best_method_name]["best_past_points"],
+            n=1,
+        ).dropna()
+        train_cols = [
+            col
+            for col in full_training_data.columns
+            if (
+                TimePointLabels.PAST.value in col
+                or TimePointLabels.PRESENT.value in col
+            )
+        ]
+        pred_col = [
+            col
+            for col in full_training_data.columns
+            if TimePointLabels.FUTURE.value in col
+        ]
+        self.best_forecast_method = self.methods[self.best_method_name][
+            "class"
+        ]()
+        #     numpy.concatenate(
+        #         (
+        #             self.training_time_data,
+        #             self.validation_time_data,
+        #         ),
+        #     ),
+        #     numpy.concatenate(
+        #         (
+        #             self.training_value_data,
+        #             self.validation_value_data,
+        #         ),
+        #     ),
+        # )
         assert self.best_forecast_method is not None
-        self.best_forecast_fit_result = self.best_forecast_method.fit()
+        self.best_forecast_fit_result = self.best_forecast_method.fit(
+            full_training_data[train_cols], full_training_data[pred_col]
+        )
+        self.full_training_data = full_training_data[train_cols]
+        # These next lines only apply to statsmodels objects.
         # Get forecast model params with:
         # self.best_forecast_fit_result.model.params
-        self.best_forecast_fit = self.best_forecast_fit_result.fittedvalues
+        # self.best_forecast_fit = self.best_forecast_fit_result.fittedvalues
         return self
 
-    def forecast(self, forecast_length: int) -> pandas.Series:
+    def forecast(
+        self,
+        forecast_length: int,
+    ) -> pandas.Series | pandas.DataFrame:
         """Calls the forecast method of the
         previously fit best_forecast_method.
 
         Args:
-            forecast_length (int): Number of
-                forecasts to predict.
+            forecast_length (int): Number of future predictions
+                to forecast.
+
+                Features for forecast predictions. There will be
+                one prediction for each set of features
+                (i.e., rows in the Series or DataFrame).
 
         Returns:
-            pandas.Series: Series of forecasts.
+            pandas.Series | pandas.DataFrame: Series
+                or DataFrame of forecasts.
 
         Raises:
             RuntimeError: If the 'fit' method has not been called.
@@ -282,26 +435,69 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 " called after the 'fit' method."
             )
         # Maybe I should change this to predict also, so as to get the time values too?
-        self.best_forecast_forecast = self.best_forecast_fit_result.forecast(
-            forecast_length,
+        # self.best_forecast_forecast = self.best_forecast_fit_result.forecast(
+        #     forecast_length,
+        # )
+        # forecast_features = self.full_training_data.iloc[-1]
+        # Here it's important to have no future points
+        # in the DataFrame so that we don't fill in the
+        # last row with NaN and drop it.
+        forecast_features = (
+            timeseries_to_labels(
+                pandas.concat(
+                    [
+                        self.training_data,
+                        self.validation_data,
+                    ]
+                ),
+                p=self.methods[self.best_method_name]["best_past_points"],
+                n=0,
+            )
+            .dropna()
+            .tail(1)
         )
+        feature_cols = [
+            col
+            for col in forecast_features.columns
+            if (
+                TimePointLabels.PAST.value in col
+                or TimePointLabels.PRESENT.value in col
+            )
+        ]
+        current_cols = [
+            col
+            for col in forecast_features.columns
+            if TimePointLabels.PRESENT.value in col
+        ]
+        forecast = []
+        for _ in range(forecast_length):
+            forecast.append(
+                self.best_forecast_fit_result.predict(
+                    X=forecast_features[feature_cols]
+                )
+            )
+            forecast_features = forecast_features.shift(
+                -len(forecast[-1]), axis=1
+            )
+            forecast_features[current_cols] = forecast[-1]
+        self.best_forecast_forecast = forecast
         # Detect whether the forecast comes with a
         # compatible index. If not, construct one
         # like those constructed in the init method:
-        if (
-            self.best_forecast_forecast.index.to_numpy().dtype
-            == self.training_time_data.dtype
-        ):
-            self.best_forecast_times = (
-                self.best_forecast_forecast.index.to_numpy()
-            )
-        else:
-            self.best_forecast_times = numpy.array(
-                [
-                    self.validation_time_data[-1] + i * self.forecast_frequency
-                    for i in range(forecast_length)
-                ]
-            )
+        # if (
+        #     self.best_forecast_forecast.index.to_numpy().dtype
+        #     == self.training_time_data.dtype
+        # ):
+        #     self.best_forecast_times = (
+        #         self.best_forecast_forecast.index.to_numpy()
+        #     )
+        # else:
+        self.best_forecast_times = numpy.array(
+            [
+                self.validation_time_data[-1] + i * self.forecast_frequency
+                for i in range(forecast_length)
+            ]
+        )
         return self
 
     def plot_all(self):
@@ -318,44 +514,53 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         colors_list = ("b", "g", "r", "c", "m", "y")
         linestyles_list = ("-", "-.")
         linestyles_list_pred = ("--", ":")
-        if (
-            "fit"  # pylint: disable=magic-value-comparison
-            not in self.methods[
-                list(
-                    self.methods.keys()  # pylint: disable=consider-iterating-dictionary
-                )[0]
-            ]
-        ):
+        # if (
+        #     "fit"  # pylint: disable=magic-value-comparison
+        #     not in self.methods[
+        #         list(
+        #             self.methods.keys()  # pylint: disable=consider-iterating-dictionary
+        #         )[0]
+        #     ]
+        # ):
+        if not self.best_forecast_method:
             warnings.warn(
                 UserWarning(
                     "'fit' method has not yet been called; "
                     "only input data will be included on the plot."
                 )
             )
+            return
         for ind, (method, vals) in enumerate(self.methods.items()):
-            if (
-                "fit"  # pylint: disable=magic-value-comparison
-                not in vals.keys()
-            ):
-                continue
             color = colors_list[int(ind % len(colors_list))]
             linestyle_ind = int(
                 (ind / len(colors_list)) % len(linestyles_list)
             )
             linestyle = linestyles_list[linestyle_ind]
             linestyle_pred = linestyles_list_pred[linestyle_ind]
-            matplotlib.pyplot.plot(
-                vals["fit"],
-                color=color,
-                linestyle=linestyle,
-                label=method,
-            )
-            matplotlib.pyplot.plot(
-                self.forecast_times,
-                vals["forecast"],
-                color=color,
-                linestyle=linestyle_pred,
-            )
+            if (
+                "fit"  # pylint: disable=magic-value-comparison
+                not in vals.keys()
+            ):
+                matplotlib.pyplot.plot(
+                    vals["forecast_times"],
+                    vals["forecast"],
+                    color=color,
+                    linestyle=linestyle_pred,
+                    label=method,
+                )
+            else:
+                matplotlib.pyplot.plot(
+                    vals["fit"],
+                    color=color,
+                    linestyle=linestyle,
+                    label=method,
+                )
+                matplotlib.pyplot.plot(
+                    vals["forecast_times"],
+                    vals["forecast"],
+                    color=color,
+                    linestyle=linestyle_pred,
+                )
         matplotlib.pyplot.legend()
         matplotlib.pyplot.show()
 
@@ -380,15 +585,17 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         matplotlib.pyplot.plot(
             self.validation_time_data, self.validation_value_data, "ko"
         )
-        matplotlib.pyplot.plot(
-            self.best_forecast_fit,
-            "b-",
-            label=self.best_forecast_method,
-        )
+        # This only is meaningful for statsmodels methods:
+        # matplotlib.pyplot.plot(
+        #     self.best_forecast_fit,
+        #     "b-",
+        #     label=self.best_forecast_method,
+        # )
         matplotlib.pyplot.plot(
             self.best_forecast_times,
             self.best_forecast_forecast,
-            "b-",
+            "b--",
+            label=self.best_forecast_method,
         )
         matplotlib.pyplot.legend()
         matplotlib.pyplot.show()

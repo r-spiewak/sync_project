@@ -6,6 +6,12 @@ import pandas
 import pytest
 
 from sync_project.forecasting.forecast import Forecast
+from sync_project.forecasting.statistics.single_exponential_smoothing import (
+    SingleExponentialSmoothing,
+)
+from sync_project.forecasting.statistics.triple_exponential_smoothing import (
+    TripleExponentialSmoothing,
+)
 
 # pylint: disable=duplicate-code
 
@@ -37,7 +43,40 @@ def test_df():
 
 
 @pytest.fixture
-def test_fcast(test_df):  # pylint: disable=redefined-outer-name
+def test_methods_dict():
+    """This fixture gives a sample dict to be used as
+    input to the Forecast class for tests."""
+    return {
+        "Single Exponential Smoothing": {
+            "class": SingleExponentialSmoothing,
+            "param_grid": {
+                "smoothing_level": numpy.arange(0, 1, 0.1),
+            },
+            "past_points": [0],
+        },
+        "Triple Exponential Smoothing": {
+            "class": TripleExponentialSmoothing,
+            "param_grid": {
+                "trend": [None, "add", "mul"],
+                "seasonal": [None, "add", "mul"],
+                "seasonal_periods": [2, 3, 6, 12, 24],
+                "smoothing_level": numpy.arange(0, 1, 0.3),
+                "smoothing_trend": numpy.arange(
+                    0,
+                    1,
+                    0.3,
+                ),
+                "smoothing_seasonal": numpy.arange(0, 1, 0.3),
+            },
+            "past_points": [0],
+        },
+    }
+
+
+@pytest.fixture
+def test_fcast(
+    test_df, test_methods_dict
+):  # pylint: disable=redefined-outer-name
     """This is an instantiation of the Forecast
     class, for use in unit tests."""
     train_df, val_df = test_df
@@ -46,12 +85,17 @@ def test_fcast(test_df):  # pylint: disable=redefined-outer-name
         train_df["Value"],
         val_df["Time"],
         val_df["Value"],
+        methods=test_methods_dict,
+        n_splits=3,
+        verbose=1,
     )
     yield fcast
 
 
 @pytest.fixture
-def test_fcast_datetimes(test_df):  # pylint: disable=redefined-outer-name
+def test_fcast_datetimes(
+    test_df, test_methods_dict
+):  # pylint: disable=redefined-outer-name
     """This is an instantiation of the Forecast
     class using a datetime index with a uniform
     frequency, for use in unit tests."""
@@ -71,6 +115,8 @@ def test_fcast_datetimes(test_df):  # pylint: disable=redefined-outer-name
         train_df["Value"],
         val_df["Time"],
         val_df["Value"],
+        methods=test_methods_dict,
+        n_splits=3,
     )
     yield fcast
 
@@ -78,6 +124,7 @@ def test_fcast_datetimes(test_df):  # pylint: disable=redefined-outer-name
 @pytest.fixture
 def test_fcast_datetimes_nonuniform(
     test_df,
+    test_methods_dict,
 ):  # pylint: disable=redefined-outer-name
     """This is an instantiation of the Forecast
     class using a datetime index without a uniform
@@ -100,5 +147,7 @@ def test_fcast_datetimes_nonuniform(
         train_df["Value"],
         val_df["Time"],
         val_df["Value"],
+        methods=test_methods_dict,
+        n_splits=3,
     )
     yield fcast
