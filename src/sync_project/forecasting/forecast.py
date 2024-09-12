@@ -594,8 +594,10 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     color=color,
                     linestyle=linestyle_pred,
                 )
-            # Add an elif here for CurveFit objects (fit, no forecast)
-            elif False:  # pylint: disable=using-constant-test
+            # Here is for CurveFit objects (fit, no forecast):
+            elif (
+                not "forecast" in vals.keys()
+            ):  # pylint: disable=magic-value-comparison
                 matplotlib.pyplot.plot(
                     vals["fit_times"],
                     vals["fit"],
@@ -649,11 +651,30 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 "b-",
                 # label=self.best_forecast_method,
             )
-        matplotlib.pyplot.plot(
-            self.best_forecast_times,
-            self.best_forecast_forecast,
-            "b--",
-            label=self.best_forecast_method,
-        )
+            matplotlib.pyplot.plot(
+                self.best_forecast_times,
+                self.best_forecast_forecast,
+                "b--",
+                label=self.best_forecast_method,
+            )
+        # Here is for CurveFit objects (fit, no forecast):
+        elif (
+            not "forecast"  # pylint: disable=magic-value-comparison
+            in self.methods[self.best_method_name].keys()
+        ):
+            matplotlib.pyplot.plot(
+                self.methods[self.best_method_name]["fit_times"],
+                self.methods[self.best_method_name]["fit"],
+                color="b",
+                linestyle="-",
+                label=self.best_method_name,
+            )
+        else:
+            matplotlib.pyplot.plot(
+                self.best_forecast_times,
+                self.best_forecast_forecast,
+                "b--",
+                label=self.best_forecast_method,
+            )
         matplotlib.pyplot.legend()
         matplotlib.pyplot.show()
