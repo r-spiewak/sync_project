@@ -2,7 +2,7 @@
 fitting the best forecasting method."""
 
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from types import NoneType
 
 import matplotlib.pyplot
@@ -36,6 +36,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         metric: Callable = mean_squared_error,
         comparison_method: Callable = min,
         n_splits: int = 5,
+        cv: int | Iterable | None = None,
         verbose: int = 0,
     ):
         """Initialization method for class.
@@ -67,6 +68,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             n_splits (int): Number of splits to be made
                 in training data for the cross-validation.
                 Defaults to 5.
+            cv (int | Iterable | None): cv splits for
+                GridSearchCV. If None, will use a
+                TimeSeriesSplit. Defaults to None.
             verbose (int): Level of verbosity in output
                 of GridSearchCV calls. Higher values
                 yield more output. Defaults to 0.
@@ -215,6 +219,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         self.best_forecast_times = None
         self.full_training_data = None
         self.n_splits = n_splits
+        self.cv = cv
         self.verbose = verbose
 
     def fit(self):  # pylint: disable=too-many-locals
@@ -249,6 +254,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             past_points_scores = []
             past_points_preds = []
             past_points_models = []
+            past_points_fit_times = []
+            past_points_preds_times = []
             for past_points in self.methods[method]["past_points"]:
                 this_training_data = timeseries_to_labels(
                     self.training_data,
@@ -276,7 +283,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 # I could call the following method once outside
                 # the loop, if I store the results in a list (since
                 # otherwise the generator will not loop results again).
-                cv = TimeSeriesSplit(
+                cv = self.cv or TimeSeriesSplit(
                     n_splits=self.n_splits,
                 ).split(this_training_data)
                 grid_search = GridSearchCV(
@@ -315,6 +322,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     self.metric(preds, this_val_data[pred_col])
                 )
                 past_points_models.append(grid_search)
+                past_points_fit_times.append(this_training_data.index)
+                past_points_preds_times.append(this_val_data.index)
             best_past_points_ind = past_points_scores.index(
                 self.comparison_method(past_points_scores)
             )
@@ -324,7 +333,14 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             fit = past_points_models[best_past_points_ind]
             forecast = past_points_preds[best_past_points_ind]
             metric = self.metric(
-                self.validation_data[:-1],
+                self.validation_data[
+                    : -(
+                        1
+                        + self.methods[method]["past_points"][
+                            best_past_points_ind
+                        ]
+                    )
+                ],
                 forecast,
             )
             self.methods[method].update(
@@ -333,11 +349,18 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                         "scores": past_points_scores,
                         "models": past_points_models,
                         "predictions": past_points_preds,
+                        "predictions_times": past_points_preds_times,
                     },
                     "best_past_points": best_past_points,
                     "result_object": fit,
                     # These two only make sense when fit
                     # itself is a statsmodels object.
+                    # In theory, I could create "fit"s
+                    # for other (ML) models also by
+                    # having the model predict on each
+                    # of the training data points. Then
+                    # I would be able to plot these "fits"
+                    # as well as the real predictions.
                     # "fit": fit.fittedvalues,
                     # "params": fit.model.params,
                     "params": fit.best_params_,
@@ -346,6 +369,26 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     "forecast_times": self.validation_time_data[:-1],
                 }
             )
+            if hasattr(fit.best_estimator_, "model_"):
+                self.methods[method]["past_points_fits"].update(
+                    {
+                        "fit": [
+                            i.best_estimator_.model_.fittedvalues
+                            for i in self.methods[method]["past_points_fits"][
+                                "models"
+                            ]
+                        ],
+                        "fit_times": past_points_fit_times,
+                    },
+                )
+                self.methods[method].update(
+                    {
+                        "fit": fit.best_estimator_.model_.fittedvalues,
+                        "fit_times": self.methods[method]["past_points_fits"][
+                            "fit_times"
+                        ][best_past_points_ind],
+                    }
+                )
             self.metric_values[ind] = metric
         # self.best_forecast_method = self.methods[
         #     self.metric_values.index(
@@ -537,19 +580,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             )
             linestyle = linestyles_list[linestyle_ind]
             linestyle_pred = linestyles_list_pred[linestyle_ind]
-            if (
-                "fit"  # pylint: disable=magic-value-comparison
-                not in vals.keys()
-            ):
+            if hasattr(vals["result_object"].best_estimator_, "model_"):
                 matplotlib.pyplot.plot(
-                    vals["forecast_times"],
-                    vals["forecast"],
-                    color=color,
-                    linestyle=linestyle_pred,
-                    label=method,
-                )
-            else:
-                matplotlib.pyplot.plot(
+                    vals["fit_times"],
                     vals["fit"],
                     color=color,
                     linestyle=linestyle,
@@ -561,6 +594,24 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     color=color,
                     linestyle=linestyle_pred,
                 )
+            # Add an elif here for CurveFit objects (fit, no forecast)
+            elif False:  # pylint: disable=using-constant-test
+                matplotlib.pyplot.plot(
+                    vals["fit_times"],
+                    vals["fit"],
+                    color=color,
+                    linestyle=linestyle,
+                    label=method,
+                )
+            else:
+                matplotlib.pyplot.plot(
+                    vals["forecast_times"],
+                    vals["forecast"],
+                    color=color,
+                    linestyle=linestyle_pred,
+                    label=method,
+                )
+
         matplotlib.pyplot.legend()
         matplotlib.pyplot.show()
 
@@ -586,11 +637,18 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             self.validation_time_data, self.validation_value_data, "ko"
         )
         # This only is meaningful for statsmodels methods:
-        # matplotlib.pyplot.plot(
-        #     self.best_forecast_fit,
-        #     "b-",
-        #     label=self.best_forecast_method,
-        # )
+        if hasattr(
+            self.methods[self.best_method_name][
+                "result_object"
+            ].best_estimator_,
+            "model_",
+        ):
+            matplotlib.pyplot.plot(
+                self.methods[self.best_method_name]["fit_times"],
+                self.methods[self.best_method_name]["fit"],
+                "b-",
+                # label=self.best_forecast_method,
+            )
         matplotlib.pyplot.plot(
             self.best_forecast_times,
             self.best_forecast_forecast,
