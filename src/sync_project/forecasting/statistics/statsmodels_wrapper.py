@@ -75,6 +75,7 @@ class StatsModelsWrapper(BaseEstimator, RegressorMixin):
         cols = [i for i in X.columns if TimePointLabels.PRESENT.value in i]
         # Flatten the input if necessary, as statsmodels expect 1D arrays for time series.
         X = np.asarray(X[cols]).flatten()
+        y = np.asarray(y).flatten()
 
         # Automatically split params between __init__ and fit.
         self._split_params()

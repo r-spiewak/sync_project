@@ -8,7 +8,7 @@ from types import NoneType
 import matplotlib.pyplot
 import numpy
 import pandas
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import make_scorer, mean_squared_error
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
 from sync_project.constants import TimePointLabels
@@ -34,6 +34,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         validation_value_data: numpy.ndarray | pandas.Series,
         methods: dict | None = None,
         metric: Callable = mean_squared_error,
+        metric_greater_is_better: bool = False,
         comparison_method: Callable = min,
         n_splits: int = 5,
         cv: int | Iterable | None = None,
@@ -61,6 +62,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             metric (Callable): Metric to use to
                 determine best forecast method.
                 Defaults to 'mean_squared_error'.
+            metric_greater_is_better (bool): Whether
+                greater is beter for metric scores.
+                Defaults to False.
             comparison_method (Callable): Method to
                 compare calculated metric values,
                 to determine the best value.
@@ -128,6 +132,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         # self.forecast_methods: dict[str, dict] = {}
         self.metric_values = [None for _ in self.methods]
         self.metric = metric
+        self.metric_greater_is_better = metric_greater_is_better
         self.comparison_method = comparison_method
         self.best_forecast_method = None
         self.best_method_name = None
@@ -289,7 +294,10 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 grid_search = GridSearchCV(
                     method_class,
                     param_grid,
-                    scoring=self.metric,
+                    scoring=make_scorer(
+                        self.metric,
+                        greater_is_better=self.metric_greater_is_better,
+                    ),
                     cv=cv,
                     verbose=self.verbose,
                 )
@@ -307,7 +315,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 # fit = method_class.fit(self.training_value_data)
                 grid_search.fit(
                     this_training_data[train_cols],
-                    this_training_data[pred_col],
+                    # this_training_data[pred_col],
+                    numpy.ravel(this_training_data[pred_col]),
                 )
                 # To use this with the wrapper class and with sklearn estimators,
                 # we need to supply a features DataFrame.
