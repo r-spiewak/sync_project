@@ -99,8 +99,10 @@ class StatsModelsWrapper(BaseEstimator, RegressorMixin):
             predictions (array, shape (n_samples,)):
                 Predicted values.
         """
-        # Ensure X is flattened as statsmodels might expect 1D arrays for time series
-        X = np.asarray(X).flatten()
+        # Pull out the correct 'feature'(s) to use.
+        cols = [i for i in X.columns if TimePointLabels.PRESENT.value in i]
+        # Ensure X is flattened as statsmodels might expect 1D arrays for time series.
+        X = np.asarray(X[cols]).flatten()
 
         return self.model_.forecast(len(X))
 
