@@ -77,10 +77,40 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
             for param_name in self.param_names
         ]
 
+        # remaining_params = {
+        #     i: self.fit_params[i]
+        #     for i in self.fit_params
+        #     if i not in self.param_names
+        # }
+
+        # pylint: disable=duplicate-code
+        # Extract only valid curve_fit parameters (e.g., bounds, maxfev, etc.)
+        valid_curve_fit_params = [
+            "bounds",
+            "method",
+            "sigma",
+            "absolute_sigma",
+            "check_finite",
+            "jac",
+        ]
+        curve_fit_params = {
+            key: self.fit_params[key]
+            for key in valid_curve_fit_params
+            if key in self.fit_params
+        }
+
         # Use curve_fit to fit the model
-        self.opt_params_, _, _, _, _ = curve_fit(
-            self.func, X, y, p0=self.p0, bounds=self.bounds, **self.fit_params
+        self.opt_params_, _ = (  # pylint:disable=unbalanced-tuple-unpacking
+            curve_fit(
+                self.func,
+                X,
+                y,
+                p0=self.p0,
+                bounds=self.bounds,
+                **curve_fit_params,
+            )
         )
+        # pylint: enable=duplicate-code
         return self
 
     def predict(
@@ -119,9 +149,9 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
             param_name: self.fit_params.get(param_name, 1)
             for param_name in self.param_names
         }
-        params.update(
-            {"p0": self.p0, "bounds": self.bounds, **self.fit_params}
-        )
+        # params.update(
+        #     {"p0": self.p0, "bounds": self.bounds}#, **self.fit_params}
+        # )
         return params
 
     def set_params(self, **params):

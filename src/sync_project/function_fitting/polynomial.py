@@ -39,15 +39,25 @@ def polynomial(
 class Polynomial(CurveFitWrapper):
     """Wrapper class for fitting an polynomial curve using curve_fit."""
 
-    def __init__(self, degree: int, **fit_params: Any):
+    def __init__(
+        self,
+        # degree: int,
+        **fit_params: Any,
+    ):
         """Initialize class.
 
         Args:
-            degree (int):
+            #degree (int):
                 The degree of the polynomial to be fit.
             fit_params (Any):
                 Initial guess for the coefficients or other curve_fit options.
         """
+        degree = -1
+        for (
+            i
+        ) in fit_params.keys():  # pylint:disable=consider-iterating-dictionary
+            if "coef_" in i:  # pylint: disable=magic-value-comparison
+                degree += 1
         self.degree = degree
         # Generate initial coefficients, defaulting to 1 if not provided in fit_params
         initial_params = {
@@ -77,8 +87,27 @@ class Polynomial(CurveFitWrapper):
             self.fit_params.get(f"coef_{i}", 1) for i in range(self.degree + 1)
         ]
 
+        # pylint: disable=duplicate-code
+        # Extract only valid curve_fit parameters (e.g., bounds, maxfev, etc.)
+        valid_curve_fit_params = [
+            "bounds",
+            "method",
+            "sigma",
+            "absolute_sigma",
+            "check_finite",
+            "jac",
+        ]
+        curve_fit_params = {
+            key: self.fit_params[key]
+            for key in valid_curve_fit_params
+            if key in self.fit_params
+        }
+
         # Fit using curve_fit
-        self.opt_params_, _, _, _, _ = curve_fit(polynomial, X, y, p0=p0)
+        self.opt_params_, _ = (  # pylint:disable=unbalanced-tuple-unpacking
+            curve_fit(polynomial, X, y, p0=p0, **curve_fit_params)
+        )
+        # pylint: enable=duplicate-code
 
         return self
 
