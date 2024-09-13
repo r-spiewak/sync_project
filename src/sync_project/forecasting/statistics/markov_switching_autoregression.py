@@ -14,9 +14,3 @@ class MarkovSwitchingAutoregression(StatsModelsWrapper):
     def _model_class(self):
         """Return the MarkovAutoregression class."""
         return MarkovAutoregression
-
-    # def _instantiate_model(self, X, y=None):
-    #     """Instantiate the MarkovAutoregression model with the parameters
-    #     passed in the constructor.
-    #     """
-    #     return MarkovAutoregression(X, **self.model_init_params)

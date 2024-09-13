@@ -2,6 +2,7 @@
 fitting functions to data."""
 
 import numpy
+from sklearn.metrics import make_scorer
 from sklearn.model_selection import GridSearchCV
 
 from sync_project.forecasting.forecast import Forecast
@@ -13,6 +14,10 @@ class FunctionFitter(Forecast):
     def fit(self):  # pylint: disable=too-many-locals
         # Clearly this monstrosity of a method needs to
         # be broken down into smaller sub-methods...
+        # Would have made it easier to subclass Forecast
+        # if that were the case, since then we could just
+        # override whichever smaller methods required it
+        # and not the whole method.
         """Method to find the function of the given options
         that best fits the data.
         """
@@ -38,13 +43,16 @@ class FunctionFitter(Forecast):
             grid_search = GridSearchCV(
                 method_class,
                 param_grid,
-                scoring=self.metric,
+                scoring=make_scorer(
+                    self.metric,
+                    greater_is_better=self.metric_greater_is_better,
+                ),
                 cv=cv,
                 verbose=self.verbose,
             )
             grid_search.fit(
                 self.training_time_data,
-                self.training_value_data,
+                numpy.ravel(self.training_value_data),
             )
             # pylint: enable=duplicate-code
             preds = grid_search.predict(X=self.validation_time_data)

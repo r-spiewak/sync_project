@@ -10,8 +10,6 @@ import pandas
 from scipy.optimize import curve_fit
 from sklearn.base import BaseEstimator, RegressorMixin
 
-# from sync_project.constants import TimePointLabels
-
 
 class CurveFitWrapper(BaseEstimator, RegressorMixin):
     """A base wrapper for scipy.optimize.curve_fit to make it compatible with scikit-learn."""
@@ -19,8 +17,6 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
     def __init__(
         self,
         func: Callable,
-        # p0: np.ndarray | pandas.Series | None = None,
-        # bounds: tuple[int | float, int | float] = (-np.inf, np.inf),
         **fit_params: Any,
     ):
         """Initialize the class.
@@ -28,13 +24,8 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
         Args:
             func (Callable): The model function,
                 f(x, ...), that will be fit to the data.
-        #p0 (np.ndarray | pandas.Series | None, optional):
-            Initial guess for the parameters.
-        #bounds (tuple[int | float, int | float], optional):
-            2-tuple of array-like. Lower and upper bounds
-            on parameters.
-        fit_params (Any):
-            Additional keyword arguments passed to curve_fit.
+            fit_params (Any):
+                Additional keyword arguments passed to curve_fit.
         """
         self.func = func
         self.p0: list = []
@@ -66,8 +57,6 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
             self (object): Fitted estimator.
         """
         # Pull out the correct 'feature'(s) to use.
-        # cols = [i for i in X.columns if TimePointLabels.PRESENT.value in i]
-        # X = np.asarray(X[cols]).flatten()
         X = np.asarray(X).flatten()
         y = np.asarray(y).flatten()
 
@@ -76,12 +65,6 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
             self.fit_params.get(param_name, 1)
             for param_name in self.param_names
         ]
-
-        # remaining_params = {
-        #     i: self.fit_params[i]
-        #     for i in self.fit_params
-        #     if i not in self.param_names
-        # }
 
         # pylint: disable=duplicate-code
         # Extract only valid curve_fit parameters (e.g., bounds, maxfev, etc.)
@@ -99,7 +82,7 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
             if key in self.fit_params
         }
 
-        # Use curve_fit to fit the model
+        # Use curve_fit to fit the model:
         self.opt_params_, _ = (  # pylint:disable=unbalanced-tuple-unpacking
             curve_fit(
                 self.func,
@@ -149,9 +132,6 @@ class CurveFitWrapper(BaseEstimator, RegressorMixin):
             param_name: self.fit_params.get(param_name, 1)
             for param_name in self.param_names
         }
-        # params.update(
-        #     {"p0": self.p0, "bounds": self.bounds}#, **self.fit_params}
-        # )
         return params
 
     def set_params(self, **params):

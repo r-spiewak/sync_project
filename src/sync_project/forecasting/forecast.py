@@ -129,7 +129,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 },
             }
         )
-        # self.forecast_methods: dict[str, dict] = {}
         self.metric_values = [None for _ in self.methods]
         self.metric = metric
         self.metric_greater_is_better = metric_greater_is_better
@@ -144,7 +143,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         # validation data.
         # First, determine if the time deltas between
         # data points are identical.
-        # self.uniform_time_deltas = False
         training_time_deltas = (
             self.training_time_data[1:] - self.training_time_data[:-1]
         )
@@ -183,12 +181,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     current_time += training_time_deltas[0]
                     self.forecast_times.append(current_time)
                 self.forecast_frequency = training_time_deltas[0]
-            # self.forecast_times = numpy.array(
-            #     [
-            #         self.validation_time_data[0] + i*self.forecast_frequency
-            #         for i in range(self.forecast_length)
-            #     ]
-            # )
         else:
             # If the training time deltas are not
             # uniform, one idea is to set the forecast
@@ -196,9 +188,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             # (based on the (end-start)/freq, and the
             # forecast frequency to that of the average
             # training time delta).
-            # I suspect this will cause issues when
-            # calculating metrics. (It will, since the
-            # lengths of the arrays won't be identical.)
+            # This will cause issues when
+            # calculating metrics, since the
+            # lengths of the arrays won't be identical.
             # Two options: Either figure out a way to
             # calculate the metrics incorporating the
             # time index info as well, or just use the
@@ -207,12 +199,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             # straightforward, we will use that here
             # (at least for now).
             self.forecast_frequency = numpy.mean(training_time_deltas)
-            # self.forecast_length = int(
-            #     (
-            #         self.validation_time_data[-1]
-            #         - self.validation_time_data[0]
-            #     ) / self.forecast_frequency
-            # )
             self.forecast_length = len(self.validation_time_data)
             # This is especially important in this case, since
             # the forecast itself will not have attached time
@@ -234,26 +220,14 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         of the given options.
         """
         for ind, method in enumerate(self.methods.keys()):
-            # method_class = self.methods[method]["class"](
-            #     self.training_time_data,
-            #     self.training_value_data,
-            # )
-            # forecast = fit.forecast(self.forecast_length)
-            # An alternative to the above method is below.
-            # However, note that in each case, if there is no
+            # Note that if there is no
             # regular frequency to the index (i.e., if the time
             # deltas are not uniform), it cannot actually
             # generate values at specific timestamps, so
             # an alternative way of estimating timestamps
             # must be used. This means the "length" of the
-            # 'forecast' above does not directly correspond to
-            # timestamps, and the 'predict' below cannot actually
-            # be used at all (since th start and end times won't
-            # correspond to actual values interpolated from the data).
-            # forecast = fit.predict(
-            #     start=self.forecast_times[0],
-            #     end=self.forecast_times[-1],
-            # )
+            # 'forecast' does not directly correspond to
+            # timestamps, except through the estimation.
             method_class = self.methods[method]["class"]()
             param_grid = self.methods[method]["param_grid"]
             past_points_scores = []
@@ -312,10 +286,13 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 # The wrapper can probably take care of the splitting
                 # of the df to just use the one column of the current
                 # timestep.
-                # fit = method_class.fit(self.training_value_data)
+                # This can probably be extended to multiple label
+                # (y) columns (for example, with n>1 above), but
+                # that will require special treatment for the estimators
+                # that expect a single 1D array (which is a problem
+                # anyway if even pandas.Series are passed).
                 grid_search.fit(
                     this_training_data[train_cols],
-                    # this_training_data[pred_col],
                     numpy.ravel(this_training_data[pred_col]),
                 )
                 # To use this with the wrapper class and with sklearn estimators,
@@ -324,7 +301,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 # For statsmodels, we can supply times (or, really, anything
                 # that has the length of the number of predictions we want).
                 # For the ML models, we must supply features, as previously.
-                # forecast = method_class.predict(X=self.validation_time_data)
                 preds = grid_search.predict(X=this_val_data[train_cols])
                 past_points_preds.append(preds)
                 past_points_scores.append(
@@ -362,16 +338,15 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     },
                     "best_past_points": best_past_points,
                     "result_object": fit,
-                    # These two only make sense when fit
-                    # itself is a statsmodels object.
+                    # This only makes sense for statsmodels
+                    # objects.
                     # In theory, I could create "fit"s
                     # for other (ML) models also by
                     # having the model predict on each
                     # of the training data points. Then
                     # I would be able to plot these "fits"
                     # as well as the real predictions.
-                    # "fit": fit.fittedvalues,
-                    # "params": fit.model.params,
+                    # "fit": .fittedvalues,  # from the best model
                     "params": fit.best_params_,
                     self.metric.__name__: metric,
                     "forecast": forecast,
@@ -399,10 +374,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     }
                 )
             self.metric_values[ind] = metric
-        # self.best_forecast_method = self.methods[
-        #     self.metric_values.index(
-        #         self.comparison_method(self.metric_values)
-        #     )
         self.best_method_name = self.comparison_method(
             self.methods,
             key=lambda v: self.methods[v][self.metric.__name__],
@@ -435,28 +406,11 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         self.best_forecast_method = self.methods[self.best_method_name][
             "class"
         ]()
-        #     numpy.concatenate(
-        #         (
-        #             self.training_time_data,
-        #             self.validation_time_data,
-        #         ),
-        #     ),
-        #     numpy.concatenate(
-        #         (
-        #             self.training_value_data,
-        #             self.validation_value_data,
-        #         ),
-        #     ),
-        # )
         assert self.best_forecast_method is not None
         self.best_forecast_fit_result = self.best_forecast_method.fit(
             full_training_data[train_cols], full_training_data[pred_col]
         )
         self.full_training_data = full_training_data[train_cols]
-        # These next lines only apply to statsmodels objects.
-        # Get forecast model params with:
-        # self.best_forecast_fit_result.model.params
-        # self.best_forecast_fit = self.best_forecast_fit_result.fittedvalues
         return self
 
     def forecast(
@@ -486,11 +440,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 "The 'forecast' method can only be"
                 " called after the 'fit' method."
             )
-        # Maybe I should change this to predict also, so as to get the time values too?
-        # self.best_forecast_forecast = self.best_forecast_fit_result.forecast(
-        #     forecast_length,
-        # )
-        # forecast_features = self.full_training_data.iloc[-1]
         # Here it's important to have no future points
         # in the DataFrame so that we don't fill in the
         # last row with NaN and drop it.
@@ -533,17 +482,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             )
             forecast_features[current_cols] = forecast[-1]
         self.best_forecast_forecast = forecast
-        # Detect whether the forecast comes with a
-        # compatible index. If not, construct one
-        # like those constructed in the init method:
-        # if (
-        #     self.best_forecast_forecast.index.to_numpy().dtype
-        #     == self.training_time_data.dtype
-        # ):
-        #     self.best_forecast_times = (
-        #         self.best_forecast_forecast.index.to_numpy()
-        #     )
-        # else:
+        # Construct a compatible "index" for the forecast:
         self.best_forecast_times = numpy.array(
             [
                 self.validation_time_data[-1] + i * self.forecast_frequency
@@ -566,14 +505,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         colors_list = ("b", "g", "r", "c", "m", "y")
         linestyles_list = ("-", "-.")
         linestyles_list_pred = ("--", ":")
-        # if (
-        #     "fit"  # pylint: disable=magic-value-comparison
-        #     not in self.methods[
-        #         list(
-        #             self.methods.keys()  # pylint: disable=consider-iterating-dictionary
-        #         )[0]
-        #     ]
-        # ):
         if not self.best_forecast_method:
             warnings.warn(
                 UserWarning(
@@ -605,8 +536,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 )
             # Here is for CurveFit objects (fit, no forecast):
             elif (
-                not "forecast" in vals.keys()
-            ):  # pylint: disable=magic-value-comparison
+                not "forecast"  # pylint: disable=magic-value-comparison
+                in vals.keys()
+            ):
                 matplotlib.pyplot.plot(
                     vals["fit_times"],
                     vals["fit"],
@@ -658,7 +590,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 self.methods[self.best_method_name]["fit_times"],
                 self.methods[self.best_method_name]["fit"],
                 "b-",
-                # label=self.best_forecast_method,
             )
             matplotlib.pyplot.plot(
                 self.best_forecast_times,

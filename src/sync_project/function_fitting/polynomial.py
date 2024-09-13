@@ -32,7 +32,6 @@ def polynomial(
         numpy.ndarray | pandas.Series:
             Polynomial evaluated at x.
     """
-    # degree = len(coeffs) - 1
     return sum(c * x**i for i, c in enumerate(reversed(coeffs)))
 
 
@@ -41,14 +40,11 @@ class Polynomial(CurveFitWrapper):
 
     def __init__(
         self,
-        # degree: int,
         **fit_params: Any,
     ):
         """Initialize class.
 
         Args:
-            #degree (int):
-                The degree of the polynomial to be fit.
             fit_params (Any):
                 Initial guess for the coefficients or other curve_fit options.
         """
@@ -103,7 +99,7 @@ class Polynomial(CurveFitWrapper):
             if key in self.fit_params
         }
 
-        # Fit using curve_fit
+        # Fit using curve_fit:
         self.opt_params_, _ = (  # pylint:disable=unbalanced-tuple-unpacking
             curve_fit(polynomial, X, y, p0=p0, **curve_fit_params)
         )

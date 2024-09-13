@@ -36,11 +36,3 @@ class Exponential(CurveFitWrapper):
         the exponential function."""
         # Need 'bounds'?
         super().__init__(exponential, **fit_params)
-
-    # def get_params(self, deep=True):
-    #     return {'p0': self.p0, 'bounds': self.bounds, **self.fit_params}
-
-    # def set_params(self, **params):
-    #     for param, value in params.items():
-    #         setattr(self, param, value)
-    #     return self
