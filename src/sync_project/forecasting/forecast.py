@@ -3,6 +3,7 @@ fitting the best forecasting method."""
 
 import warnings
 from collections.abc import Callable, Iterable
+from copy import deepcopy
 from types import NoneType
 
 import matplotlib.pyplot
@@ -26,7 +27,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
     and parameters, of the given forecasting
     methods."""
 
-    def __init__(  # pylint: disable=too-many-arguments
+    def __init__(  # pylint: disable=too-many-arguments,too-many-statements
         self,
         training_time_data: numpy.ndarray | pandas.Series,
         training_value_data: numpy.ndarray | pandas.Series,
@@ -34,7 +35,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         validation_value_data: numpy.ndarray | pandas.Series,
         methods: dict | None = None,
         metric: Callable = mean_squared_error,
-        metric_greater_is_better: bool = False,
+        # metric_greater_is_better: bool = False,
         comparison_method: Callable = min,
         n_splits: int = 5,
         cv: int | Iterable | None = None,
@@ -62,7 +63,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             metric (Callable): Metric to use to
                 determine best forecast method.
                 Defaults to 'mean_squared_error'.
-            metric_greater_is_better (bool): Whether
+            #metric_greater_is_better (bool): Whether
                 greater is beter for metric scores.
                 Defaults to False.
             comparison_method (Callable): Method to
@@ -101,7 +102,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             self.validation_time_data,
         )
         self.methods = (
-            methods
+            deepcopy(methods)
             if methods
             else {
                 "Single Exponential Smoothing": {
@@ -131,10 +132,18 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         )
         self.metric_values = [None for _ in self.methods]
         self.metric = metric
-        self.metric_greater_is_better = metric_greater_is_better
+        # self.metric_greater_is_better = metric_greater_is_better
         self.comparison_method = comparison_method
+        self.metric_greater_is_better = (
+            self.comparison_method(  # pylint: disable=magic-value-comparison
+                2, 1
+            )
+            == 2  # pylint: disable=magic-value-comparison
+        )
         self.best_forecast_method = None
         self.best_method_name = None
+        self.best_method_score = None
+        self.best_past_points = None
         self.best_forecast_fit_result = None
         self.best_forecast_fit = None
         self.best_forecast_forecast = None
@@ -212,8 +221,9 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         self.n_splits = n_splits
         self.cv = cv
         self.verbose = verbose
+        self.test_outs: dict = {}
 
-    def fit(self):  # pylint: disable=too-many-locals
+    def fit(self):  # pylint: disable=too-many-locals,too-many-statements
         # Clearly this monstrosity of a method needs to
         # be broken down into smaller sub-methods...
         """Method to find the best forecast method
@@ -235,6 +245,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             past_points_models = []
             past_points_fit_times = []
             past_points_preds_times = []
+            self.methods[method]["past_points_dict"] = {}
             for past_points in self.methods[method]["past_points"]:
                 this_training_data = timeseries_to_labels(
                     self.training_data,
@@ -304,11 +315,34 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 preds = grid_search.predict(X=this_val_data[train_cols])
                 past_points_preds.append(preds)
                 past_points_scores.append(
-                    self.metric(preds, this_val_data[pred_col])
+                    self.metric(this_val_data[pred_col], preds)
                 )
                 past_points_models.append(grid_search)
                 past_points_fit_times.append(this_training_data.index)
                 past_points_preds_times.append(this_val_data.index)
+                self.methods[method]["past_points_dict"].update(
+                    {
+                        past_points: {
+                            "train_cols": train_cols,
+                            "pred_col": pred_col,
+                            "object": grid_search,
+                            "preds": preds,
+                            "score": self.metric(
+                                preds, this_val_data[pred_col]
+                            ),
+                            "fit_times": this_training_data.index,
+                            "preds_times": this_val_data.index,
+                        },
+                    },
+                )
+                if hasattr(grid_search.best_estimator_, "model_"):
+                    self.methods[method]["past_points_dict"][
+                        past_points
+                    ].update(
+                        {
+                            "fit": grid_search.best_estimator_.model_.fittedvalues,
+                        },
+                    )
             best_past_points_ind = past_points_scores.index(
                 self.comparison_method(past_points_scores)
             )
@@ -317,17 +351,21 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             ]
             fit = past_points_models[best_past_points_ind]
             forecast = past_points_preds[best_past_points_ind]
-            metric = self.metric(
-                self.validation_data[
-                    : -(
-                        1
-                        + self.methods[method]["past_points"][
-                            best_past_points_ind
-                        ]
-                    )
-                ],
-                forecast,
-            )
+            # This is wrong, because this would actually be
+            # the (t) column from self.validation_data,
+            # not the (t+1) column.
+            # metric = self.metric(
+            #     self.validation_data[
+            #         : -(
+            #             1
+            #             + self.methods[method]["past_points"][
+            #                 best_past_points_ind
+            #             ]
+            #         )
+            #     ],
+            #     forecast,
+            # )
+            metric = past_points_scores[best_past_points_ind]
             self.methods[method].update(
                 {
                     "past_points_fits": {
@@ -349,8 +387,21 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     # "fit": .fittedvalues,  # from the best model
                     "params": fit.best_params_,
                     self.metric.__name__: metric,
+                    # f"Alternate {self.metric.__name__}": self.metric(
+                    #     self.validation_data[
+                    #         : -(
+                    #             1
+                    #             + self.methods[method]["past_points"][
+                    #                 best_past_points_ind
+                    #             ]
+                    #         )
+                    #     ],
+                    #     forecast,
+                    # ),
                     "forecast": forecast,
-                    "forecast_times": self.validation_time_data[:-1],
+                    "forecast_times": past_points_preds_times[
+                        best_past_points_ind
+                    ],
                 }
             )
             if hasattr(fit.best_estimator_, "model_"):
@@ -374,9 +425,31 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     }
                 )
             self.metric_values[ind] = metric
-        self.best_method_name = self.comparison_method(
-            self.methods,
-            key=lambda v: self.methods[v][self.metric.__name__],
+        # self.best_method_name = self.comparison_method(
+        #     self.methods,
+        #     key=lambda v: self.methods[v][self.metric.__name__],
+        # )
+        for meth, vals in self.methods.items():
+            if self.verbose >= 1:
+                print(f"{meth}:")
+            for past_points in vals["past_points_dict"].keys():
+                this_score = vals["past_points_dict"][past_points]["score"]
+                if self.verbose >= 1:
+                    print(f"\t{past_points} past points score: {this_score}")
+                if (
+                    self.best_method_score is None
+                    or self.comparison_method(
+                        this_score, self.best_method_score
+                    )
+                    != self.best_method_score
+                ):
+                    self.best_method_name = meth
+                    self.best_past_points = past_points
+                    self.best_method_score = this_score
+        self.test_outs.update(
+            {
+                "best_method_name before full training data": self.best_method_name
+            }
         )
         # Retrain best model on training and validation data:
         # Combine datasets and use best_past_points:
@@ -387,7 +460,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     self.validation_data,
                 ]
             ),
-            p=self.methods[self.best_method_name]["best_past_points"],
+            # p=self.methods[self.best_method_name]["best_past_points"],
+            p=self.best_past_points,
             n=1,
         ).dropna()
         train_cols = [
@@ -403,6 +477,15 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             for col in full_training_data.columns
             if TimePointLabels.FUTURE.value in col
         ]
+        self.test_outs.update(
+            {
+                "past_points": self.methods[self.best_method_name][
+                    "best_past_points"
+                ],
+                "train_cols": train_cols,
+                "pred_col": pred_col,
+            }
+        )
         self.best_forecast_method = self.methods[self.best_method_name][
             "class"
         ]()
@@ -411,6 +494,11 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             full_training_data[train_cols], full_training_data[pred_col]
         )
         self.full_training_data = full_training_data[train_cols]
+        self.test_outs.update(
+            {
+                "best_method_name after full training data": self.best_method_name
+            }
+        )
         return self
 
     def forecast(
@@ -451,7 +539,8 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                         self.validation_data,
                     ]
                 ),
-                p=self.methods[self.best_method_name]["best_past_points"],
+                # p=self.methods[self.best_method_name]["best_past_points"],
+                p=self.best_past_points,
                 n=0,
             )
             .dropna()
@@ -595,7 +684,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 self.best_forecast_times,
                 self.best_forecast_forecast,
                 "b--",
-                label=self.best_forecast_method,
+                label=self.best_method_name,
             )
         # Here is for CurveFit objects (fit, no forecast):
         elif (
@@ -614,7 +703,7 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                 self.best_forecast_times,
                 self.best_forecast_forecast,
                 "b--",
-                label=self.best_forecast_method,
+                label=self.best_method_name,
             )
         matplotlib.pyplot.legend()
         matplotlib.pyplot.show()

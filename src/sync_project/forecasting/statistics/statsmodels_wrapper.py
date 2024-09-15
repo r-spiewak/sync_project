@@ -84,6 +84,8 @@ class StatsModelsWrapper(BaseEstimator, RegressorMixin):
         self.model_ = self._instantiate_model(X, y)
 
         # Fit the model to the data.
+        # Issue here with y-data not being 1D, though it was
+        # transformed earlier, in self._predict?
         self.model_ = self.model_.fit(**self.model_fit_params)
 
         return self
