@@ -1,6 +1,8 @@
 # Sync Project
 
-Repo for Sync project.
+Repo for Sync project. 
+
+Assignment files are located in the `assignment_files` directory. Demo analysis is in the `sample_analysis_demo.ipynb` notebook in the main project directory. Supporting code is nested under the `src` directory. Tests for the supporting code are in the `tests` directory.
 
 ## Installation
 
