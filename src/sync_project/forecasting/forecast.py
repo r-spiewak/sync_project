@@ -35,7 +35,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         validation_value_data: numpy.ndarray | pandas.Series,
         methods: dict | None = None,
         metric: Callable = mean_squared_error,
-        # metric_greater_is_better: bool = False,
         comparison_method: Callable = min,
         n_splits: int = 5,
         cv: int | Iterable | None = None,
@@ -63,9 +62,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             metric (Callable): Metric to use to
                 determine best forecast method.
                 Defaults to 'mean_squared_error'.
-            #metric_greater_is_better (bool): Whether
-                greater is beter for metric scores.
-                Defaults to False.
             comparison_method (Callable): Method to
                 compare calculated metric values,
                 to determine the best value.
@@ -132,7 +128,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         )
         self.metric_values = [None for _ in self.methods]
         self.metric = metric
-        # self.metric_greater_is_better = metric_greater_is_better
         self.comparison_method = comparison_method
         self.metric_greater_is_better = (
             self.comparison_method(  # pylint: disable=magic-value-comparison
@@ -221,7 +216,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
         self.n_splits = n_splits
         self.cv = cv
         self.verbose = verbose
-        self.test_outs: dict = {}
 
     def fit(self):  # pylint: disable=too-many-locals,too-many-statements
         # Clearly this monstrosity of a method needs to
@@ -351,20 +345,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             ]
             fit = past_points_models[best_past_points_ind]
             forecast = past_points_preds[best_past_points_ind]
-            # This is wrong, because this would actually be
-            # the (t) column from self.validation_data,
-            # not the (t+1) column.
-            # metric = self.metric(
-            #     self.validation_data[
-            #         : -(
-            #             1
-            #             + self.methods[method]["past_points"][
-            #                 best_past_points_ind
-            #             ]
-            #         )
-            #     ],
-            #     forecast,
-            # )
             metric = past_points_scores[best_past_points_ind]
             self.methods[method].update(
                 {
@@ -387,17 +367,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     # "fit": .fittedvalues,  # from the best model
                     "params": fit.best_params_,
                     self.metric.__name__: metric,
-                    # f"Alternate {self.metric.__name__}": self.metric(
-                    #     self.validation_data[
-                    #         : -(
-                    #             1
-                    #             + self.methods[method]["past_points"][
-                    #                 best_past_points_ind
-                    #             ]
-                    #         )
-                    #     ],
-                    #     forecast,
-                    # ),
                     "forecast": forecast,
                     "forecast_times": past_points_preds_times[
                         best_past_points_ind
@@ -425,10 +394,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     }
                 )
             self.metric_values[ind] = metric
-        # self.best_method_name = self.comparison_method(
-        #     self.methods,
-        #     key=lambda v: self.methods[v][self.metric.__name__],
-        # )
         for meth, vals in self.methods.items():
             if self.verbose >= 1:
                 print(f"{meth}:")
@@ -446,11 +411,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     self.best_method_name = meth
                     self.best_past_points = past_points
                     self.best_method_score = this_score
-        self.test_outs.update(
-            {
-                "best_method_name before full training data": self.best_method_name
-            }
-        )
         # Retrain best model on training and validation data:
         # Combine datasets and use best_past_points:
         full_training_data = timeseries_to_labels(
@@ -460,7 +420,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                     self.validation_data,
                 ]
             ),
-            # p=self.methods[self.best_method_name]["best_past_points"],
             p=self.best_past_points,
             n=1,
         ).dropna()
@@ -477,15 +436,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             for col in full_training_data.columns
             if TimePointLabels.FUTURE.value in col
         ]
-        self.test_outs.update(
-            {
-                "past_points": self.methods[self.best_method_name][
-                    "best_past_points"
-                ],
-                "train_cols": train_cols,
-                "pred_col": pred_col,
-            }
-        )
         self.best_forecast_method = self.methods[self.best_method_name][
             "class"
         ]()
@@ -494,11 +444,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
             full_training_data[train_cols], full_training_data[pred_col]
         )
         self.full_training_data = full_training_data[train_cols]
-        self.test_outs.update(
-            {
-                "best_method_name after full training data": self.best_method_name
-            }
-        )
         return self
 
     def forecast(
@@ -539,7 +484,6 @@ class Forecast:  # pylint: disable=too-many-instance-attributes
                         self.validation_data,
                     ]
                 ),
-                # p=self.methods[self.best_method_name]["best_past_points"],
                 p=self.best_past_points,
                 n=0,
             )
