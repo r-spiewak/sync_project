@@ -1,15 +1,22 @@
 [tool.poetry]
-name = "python_template"
+name = "sync_project"
 version = "0.1.0"
 description = ""
 authors = ["r-spiewak <63987228+r-spiewak@users.noreply.github.com>"]
 readme = "README.md"
-packages = [{include = "python_template", from = "src"}]
+packages = [{include = "sync_project", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
 typer = "^0.12.3"
 pandas = "^2.2.2"
+jupyter = "^1.1.1"
+matplotlib = "^3.9.2"
+numpy = "^2.1.1"
+statsmodels = "^0.14.2"
+scikit-learn = "^1.5.1"
+xgboost = "^2.1.1"
+scipy = "^1.14.1"
 
 [tool.poetry.group.dev.dependencies]
 autoflake = "^2.2.1"
@@ -68,7 +75,7 @@ addopts = "--basetemp=/tmp/pytest"
 source = ["src", "tests"]
 omit = []
 # For avoiding sqlite3 concurrency issues on CIFS drives:
-data_file = "/tmp/script_profits/.coverage"
+data_file = "/tmp/sync_project/.coverage"
 
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
@@ -92,8 +99,8 @@ exclude_also = [
 ignore_errors = true
 
 [tool.poetry.scripts]
-python-template = 'python_template.run:run'
-python_template = 'python_template.run:run'
+sync-project = 'sync_project.run:run'
+sync_project = 'sync_project.run:run'
 
 [build-system]
 requires = ["poetry-core"]
