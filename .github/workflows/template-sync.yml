@@ -25,6 +25,6 @@ jobs:
       - name: actions-template-sync
         uses: AndreasAugustin/actions-template-sync@v2
         with:
-          source_repo_path: r-spiewak/git_template
+          source_repo_path: r-spiewak/python_template
           #upstream_branch: <target_branch> # defaults to main
           #pr_labels: <label1>,<label2>[,...] # defaults to template_sync
