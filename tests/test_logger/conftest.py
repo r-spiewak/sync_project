@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from sync_project.logger import LoggerMixin
+from python_template.logger import LoggerMixin
 
 
 @pytest.fixture
