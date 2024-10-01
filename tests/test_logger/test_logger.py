@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from sync_project.logger import LoggerMixin
+from python_template.logger import LoggerMixin
 
 
 def test_logger(test_class):
@@ -19,7 +19,9 @@ def test_logger(test_class):
     assert test_text in lines[0]
 
     # Test with custom logger_filename and logger_format:
-    logger_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_Test.log"
+    logger_filename = (
+        f"logs/{datetime.now().strftime('%Y%m%d_%H%M%S')}_Test.log"
+    )
     logger_format = (
         "Extra stuff: %(asctime)s.%(msecs)d %(levelname)-8s "
         "[%(pathname)s:%(lineno)d in %(funcName)s] "
